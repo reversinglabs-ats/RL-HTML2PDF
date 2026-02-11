@@ -1,0 +1,38 @@
+name: dependabot-auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-metadata:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log update type
+        run: |
+          echo "Update type: ${{ steps.metadata.outputs.update-type }}"
+          echo "Dependency names: ${{ steps.metadata.outputs.dependency-names }}"
+          echo "All Dependabot PRs require manual review."
+
+      # ---------------------------------------------------------------------
+      # AUTO-MERGE STUB (uncomment to enable auto-merge for patch/minor)
+      # ---------------------------------------------------------------------
+      # - name: Auto-approve patch and minor updates
+      #   if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     gh pr review "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --approve
+      #     gh pr merge "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --auto --squash
+      # ---------------------------------------------------------------------

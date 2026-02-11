@@ -1,0 +1,52 @@
+name: Security
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  deps-audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # Note: Non-blocking by design - emits warning but allows CI to pass
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip install "."
+          pip-audit || echo "::warning::Vulnerabilities found"
+
+  bandit:
+    name: Static security analysis (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Bandit SAST
+        run: |
+          pip install bandit
+          bandit RL-HTML2PDF.py -q
+
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Trivy scan (filesystem)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: "fs"
+          ignore-unfixed: true
+          format: "table"
+          exit-code: "1"

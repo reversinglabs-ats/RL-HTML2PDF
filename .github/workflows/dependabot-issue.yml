@@ -1,0 +1,28 @@
+name: dependabot-issue
+
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  create-issue:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Create tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -X POST \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues \
+            -d '{
+              "title": "Review: ${{ github.event.pull_request.title }}",
+              "body": "Dependabot opened PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.html_url }}",
+              "labels": ["dependencies"]
+            }'
