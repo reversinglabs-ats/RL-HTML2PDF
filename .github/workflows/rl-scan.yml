@@ -70,46 +70,10 @@ jobs:
             '
 
       - name: Upload scan report
-        if: success() || failure()
-        uses: actions/upload-artifact@v6
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: rl-scan-report
-          path: rl-reports/
-          retention-days: 30
-
-      - name: Report scan status
-        if: success() || failure()
-        run: |
-          echo "Status: '${{ steps.rl-scan.outputs.status }}'"
-          echo "Description: '${{ steps.rl-scan.outputs.description }}'"
-
-  create-issues:
-    name: Create issues from scan findings
-    needs: scan
-    if: failure()
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-
-    steps:
-      - name: Download scan report
-        uses: actions/download-artifact@v7
-        with:
-          name: rl-scan-report
-          path: rl-reports
-
-      - name: Locate rl-json report
-        id: find-report
-        run: |
-          report=$(find rl-reports -name "*.rl.json" -type f | head -1)
-          if [ -z "$report" ]; then
-            echo "::error::No rl-json report found in rl-reports/"
-            ls -R rl-reports/
-            exit 1
-          fi
-          echo "report-path=$report" >> "$GITHUB_OUTPUT"
           path: ./rl-reports/
 
       - name: Checkout rl-scanner-to-github
