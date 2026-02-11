@@ -74,7 +74,7 @@ jobs:
 
     steps:
       - name: Download scan report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: rl-scan-report
           path: rl-reports
