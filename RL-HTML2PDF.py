@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
-from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
-from pathlib import Path
 import sys
 import tempfile
 import threading
+from contextlib import contextmanager
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 try:
     from playwright.sync_api import sync_playwright
 except ImportError as exc:
-    raise SystemExit(
-        "Playwright is required. Install with: pip install ."
-    ) from exc
+    raise SystemExit("Playwright is required. Install with: pip install .") from exc
 
 logger = logging.getLogger("rl-html2pdf")
 
@@ -26,6 +24,7 @@ _LARGE_DATA_JS_THRESHOLD = 300_000_000  # 300 MB
 # ---------------------------------------------------------------------------
 # Large data.js chunking (ported from analyst-workbench report_store.py)
 # ---------------------------------------------------------------------------
+
 
 def _extract_data_array(data_js_path: Path, marker: str, out_path: Path) -> None:
     """Stream data.js in 1 MB chunks, extracting a named byte-array to a .bin file."""
@@ -45,14 +44,14 @@ def _extract_data_array(data_js_path: Path, marker: str, out_path: Path) -> None
                 if not started:
                     marker_idx = data.find(marker)
                     if marker_idx == -1:
-                        search_tail = data[-len(marker):]
+                        search_tail = data[-len(marker) :]
                         continue
                     bracket_idx = data.find("[", marker_idx)
                     if bracket_idx == -1:
                         search_tail = data[marker_idx:]
                         continue
                     started = True
-                    data = data[bracket_idx + 1:]
+                    data = data[bracket_idx + 1 :]
 
                 for char in data:
                     if char.isdigit():
@@ -61,9 +60,7 @@ def _extract_data_array(data_js_path: Path, marker: str, out_path: Path) -> None
                     if digit_buffer:
                         value = int(digit_buffer)
                         if value < 0 or value > 255:
-                            raise RuntimeError(
-                                f"Invalid byte value for {marker}: {value}"
-                            )
+                            raise RuntimeError(f"Invalid byte value for {marker}: {value}")
                         pending.append(value)
                         if len(pending) >= 1024 * 1024:
                             out_file.write(pending)
@@ -79,9 +76,7 @@ def _extract_data_array(data_js_path: Path, marker: str, out_path: Path) -> None
             if digit_buffer:
                 value = int(digit_buffer)
                 if value < 0 or value > 255:
-                    raise RuntimeError(
-                        f"Invalid byte value for {marker}: {value}"
-                    )
+                    raise RuntimeError(f"Invalid byte value for {marker}: {value}")
                 pending.append(value)
             if pending:
                 out_file.write(pending)
@@ -187,7 +182,7 @@ def _maybe_patch_data_js(
     stub_path = cache_dir / "data.js"
     cli_context_json = json.dumps(cli_context, separators=(",", ":"))
     stub = (
-        '/*rl-html2pdf-stub-v1*/'
+        "/*rl-html2pdf-stub-v1*/"
         '"use strict";'
         "(globalThis.webpackChunkportal_frontend="
         "globalThis.webpackChunkportal_frontend||[]).push([[543],{2288:(t,a,T)=>{"
@@ -224,6 +219,7 @@ def _maybe_patch_data_js(
 # ---------------------------------------------------------------------------
 # Local HTTP server
 # ---------------------------------------------------------------------------
+
 
 @contextmanager
 def local_http_server(directory, stub_data_js=None, cache_dir=None):
@@ -287,6 +283,7 @@ def local_http_server(directory, stub_data_js=None, cache_dir=None):
 # PDF rendering
 # ---------------------------------------------------------------------------
 
+
 def render_html_to_pdf(html_file_path, output_pdf_path):
     """Render JS-driven HTML to PDF using Playwright."""
     html_path = Path(html_file_path).resolve()
@@ -304,8 +301,7 @@ def render_html_to_pdf(html_file_path, output_pdf_path):
     ready_timeout_ms = 120_000 if is_large_report else 60_000
     min_root_children = 1
     loading_selector = (
-        "[role='progressbar'], [aria-busy='true'], .loading, .spinner, "
-        ".MuiCircularProgress-root"
+        "[role='progressbar'], [aria-busy='true'], .loading, .spinner, " ".MuiCircularProgress-root"
     )
     loading_timeout_ms = 120_000 if is_large_report else 60_000
     render_settle_ms = 5000 if is_large_report else 2000
@@ -330,21 +326,19 @@ def render_html_to_pdf(html_file_path, output_pdf_path):
             cache_dir = tmp_dir
             stub_data_js = _maybe_patch_data_js(data_js, cache_dir)
 
-        with local_http_server(html_path.parent, stub_data_js=stub_data_js, cache_dir=cache_dir) as port:
+        with local_http_server(
+            html_path.parent, stub_data_js=stub_data_js, cache_dir=cache_dir
+        ) as port:
             url = f"http://127.0.0.1:{port}/{html_path.name}"
             with sync_playwright() as p:
                 browser = p.chromium.launch(channel=browser_channel)
                 try:
                     page = browser.new_page()
-                    page.set_viewport_size(
-                        {"width": viewport_width, "height": viewport_height}
-                    )
+                    page.set_viewport_size({"width": viewport_width, "height": viewport_height})
 
                     page.goto(url, wait_until="load", timeout=goto_timeout_ms)
                     try:
-                        page.wait_for_load_state(
-                            "networkidle", timeout=networkidle_timeout_ms
-                        )
+                        page.wait_for_load_state("networkidle", timeout=networkidle_timeout_ms)
                     except Exception:
                         logger.warning(
                             "Network did not reach idle within %d ms; proceeding",
@@ -352,9 +346,7 @@ def render_html_to_pdf(html_file_path, output_pdf_path):
                         )
 
                     try:
-                        page.wait_for_selector(
-                            ready_selector, timeout=ready_timeout_ms
-                        )
+                        page.wait_for_selector(ready_selector, timeout=ready_timeout_ms)
                     except Exception:
                         logger.warning(
                             "Ready selector '%s' not found within %d ms; proceeding",
@@ -421,10 +413,9 @@ def render_html_to_pdf(html_file_path, output_pdf_path):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Render an HTML report to PDF using Playwright."
-    )
+    parser = argparse.ArgumentParser(description="Render an HTML report to PDF using Playwright.")
     parser.add_argument(
         "-i",
         "--input",
