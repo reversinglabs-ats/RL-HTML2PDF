@@ -9,49 +9,70 @@ on:
 permissions:
   contents: read
   issues: write
-  statuses: write
-  pull-requests: write
 
 jobs:
-  scan:
-    name: Build and scan
+  scan-and-report:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    outputs:
-      scan-status: ${{ steps.rl-scan.outputs.status }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: pip
-
       - name: Build package
-        id: build
         run: |
-          python -m pip install --upgrade pip build
-          python -m build
-          echo "scanfile=$(ls dist/*.whl)" >> "$GITHUB_OUTPUT"
+          mkdir -p ./packages ./rl-reports
+          python3 -m pip install --upgrade pip build
+          python3 -m build
+          cp dist/*.whl ./packages/
 
-      - name: Scan with ReversingLabs
-        id: rl-scan
-        env:
-          RLPORTAL_ACCESS_TOKEN: ${{ secrets.RLPORTAL_ACCESS_TOKEN }}
-        uses: reversinglabs/gh-action-rl-scanner-cloud-only@v1
-        with:
-          artifact-to-scan: ${{ steps.build.outputs.scanfile }}
-          rl-portal-server: ${{ vars.RL_PORTAL_SERVER }}
-          rl-portal-org: ${{ vars.RL_PORTAL_ORG }}
-          rl-portal-group: ${{ vars.RL_PORTAL_GROUP }}
-          rl-package-url: rl-html2pdf/rl-html2pdf@${{ github.sha }}
-          report-path: rl-reports
-          rl-verbose: true
+      - name: Scan with rl-scanner
+        run: |
+          docker run --rm \
+            -e RLSECURE_ENCODED_LICENSE=${{ secrets.RLSECURE_ENCODED_LICENSE }} \
+            -e RLSECURE_SITE_KEY=${{ secrets.RLSECURE_SITE_KEY }} \
+            -v "${{ github.workspace }}/packages:/packages:ro" \
+            -v "${{ github.workspace }}/rl-reports:/report" \
+            --entrypoint /bin/bash \
+            reversinglabs/rl-scanner \
+            -c '
+              set -e
+              rl-deploy install /tmp/__rlsecure --no-tracking \
+                --from-cache=/tmp/rl-secure.cache \
+                --encoded-key="$RLSECURE_ENCODED_LICENSE" \
+                --site-key="$RLSECURE_SITE_KEY"
+
+              cp /packages/*.whl /tmp/__rlsecure/
+
+              /tmp/__rlsecure/rl-secure init --rl-store=/tmp/__rlsecure/rlstore
+
+              /tmp/__rlsecure/rl-secure scan --no-tracking \
+                --rl-store=/tmp/__rlsecure/rlstore \
+                --purl=pkg:rl/rl-html2pdf/rl-html2pdf@${{ github.sha }} \
+                --file-path=/tmp/__rlsecure/*.whl
+
+              /tmp/__rlsecure/rl-secure report \
+                --rl-store=/tmp/__rlsecure/rlstore \
+                --purl=pkg:rl/rl-html2pdf/rl-html2pdf@${{ github.sha }} \
+                --output-path=/report \
+                --format=rl-json
+
+              chmod -R a+rX /report
+
+              echo ""
+              echo "=== Scan Results ==="
+              /tmp/__rlsecure/rl-secure status \
+                --rl-store=/tmp/__rlsecure/rlstore \
+                --purl=pkg:rl/rl-html2pdf/rl-html2pdf@${{ github.sha }} \
+                --return-status || EXIT_CODE=$?
+
+              exit ${EXIT_CODE:-0}
+            '
 
       - name: Upload scan report
         if: success() || failure()
+        uses: actions/upload-artifact@v6
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: rl-scan-report
@@ -89,27 +110,32 @@ jobs:
             exit 1
           fi
           echo "report-path=$report" >> "$GITHUB_OUTPUT"
+          path: ./rl-reports/
 
       - name: Checkout rl-scanner-to-github
+        if: always()
         uses: actions/checkout@v6
         with:
           repository: reversinglabs-ats/rl-scanner-to-github
           path: rl-scanner-to-github
 
       - name: Set up Python
+        if: always()
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: always()
         run: pip install requests
 
       - name: Create GitHub issues
+        if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python rl-scanner-to-github/src/main.py \
-            --report "${{ steps.find-report.outputs.report-path }}" \
+            --report ./rl-reports/report.rl.json \
             --metadata-dir rl-scanner-to-github/data/rl-scanner-metadata/data \
-            --max-issues 10
+            --max-issues 5

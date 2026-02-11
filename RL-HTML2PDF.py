@@ -301,7 +301,7 @@ def render_html_to_pdf(html_file_path, output_pdf_path):
     ready_timeout_ms = 120_000 if is_large_report else 60_000
     min_root_children = 1
     loading_selector = (
-        "[role='progressbar'], [aria-busy='true'], .loading, .spinner, " ".MuiCircularProgress-root"
+        "[role='progressbar'], [aria-busy='true'], .loading, .spinner, .MuiCircularProgress-root"
     )
     loading_timeout_ms = 120_000 if is_large_report else 60_000
     render_settle_ms = 5000 if is_large_report else 2000
