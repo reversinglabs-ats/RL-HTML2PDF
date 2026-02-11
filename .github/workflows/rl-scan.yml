@@ -20,11 +20,13 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build package
+        id: build
         run: |
           mkdir -p ./packages ./rl-reports
           python3 -m pip install --upgrade pip build
           python3 -m build
           cp dist/*.whl ./packages/
+          echo "whl_name=$(basename dist/*.whl)" >> "$GITHUB_OUTPUT"
 
       - name: Scan with rl-scanner
         run: |
@@ -42,14 +44,14 @@ jobs:
                 --encoded-key="$RLSECURE_ENCODED_LICENSE" \
                 --site-key="$RLSECURE_SITE_KEY"
 
-              cp /packages/*.whl /tmp/__rlsecure/
+              cp /packages/${{ steps.build.outputs.whl_name }} /tmp/__rlsecure/
 
               /tmp/__rlsecure/rl-secure init --rl-store=/tmp/__rlsecure/rlstore
 
               /tmp/__rlsecure/rl-secure scan --no-tracking \
                 --rl-store=/tmp/__rlsecure/rlstore \
                 --purl=pkg:rl/rl-html2pdf/rl-html2pdf@${{ github.sha }} \
-                --file-path=/tmp/__rlsecure/*.whl
+                --file-path=/tmp/__rlsecure/${{ steps.build.outputs.whl_name }}
 
               /tmp/__rlsecure/rl-secure report \
                 --rl-store=/tmp/__rlsecure/rlstore \
