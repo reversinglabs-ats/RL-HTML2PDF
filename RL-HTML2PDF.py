@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 import tempfile
 import threading
@@ -179,13 +180,32 @@ def _maybe_patch_data_js(
     assets = _ensure_data_assets(data_js, cache_dir)
     cli_context = json.loads(assets["cli_context"].read_text(encoding="utf-8"))
 
+    # Parse webpack identifiers from the original data.js header
+    with data_js.open("r", encoding="utf-8", errors="ignore") as f:
+        header = f.read(1024)
+
+    m = re.match(
+        r'"use strict";\(globalThis\.(webpackChunk\w+)='
+        r"globalThis\.\1\|\|\[\]\)\.push\(\[\[(\d+)\],\{(\d+):",
+        header,
+    )
+    if m:
+        chunk_var = m.group(1)
+        chunk_id = m.group(2)
+        module_id = m.group(3)
+    else:
+        logger.warning("Could not parse webpack header; using defaults")
+        chunk_var = "webpackChunkportal_frontend"
+        chunk_id = "543"
+        module_id = "2288"
+
     stub_path = cache_dir / "data.js"
     cli_context_json = json.dumps(cli_context, separators=(",", ":"))
     stub = (
         "/*rl-html2pdf-stub-v1*/"
         '"use strict";'
-        "(globalThis.webpackChunkportal_frontend="
-        "globalThis.webpackChunkportal_frontend||[]).push([[543],{2288:(t,a,T)=>{"
+        f"(globalThis.{chunk_var}="
+        f"globalThis.{chunk_var}||[]).push([[{chunk_id}],{{{module_id}:(t,a,T)=>{{"
         "T.r(a),T.d(a,{default:()=>_});"
         "const u=(n)=>{try{const r=new URL(n,new URL('./',self.location.href));"
         "const x=new XMLHttpRequest();x.open('GET',r.toString(),!1);"
